@@ -4,25 +4,36 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
+import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.Toast;
 
+import com.pravin.chathotspot.chat.ConnectedDeviceModel;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.lang.reflect.Method;
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     Button btnHost,btnJoin;
     WifiManager wifiManager;
+    List<ConnectedDeviceModel> connectedDeviceModels;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         btnHost=(Button)findViewById(R.id.btnHost);
         btnJoin=(Button)findViewById(R.id.btnJoin);
-
+        connectedDeviceModels=new ArrayList<>();
         btnHost.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -62,9 +73,12 @@ public class MainActivity extends AppCompatActivity {
                 } catch (Exception e) {
                     Log.e(this.getClass().toString(), "", e);
                 }
-                startActivity(new Intent(MainActivity.this,HostActivity.class));
+
+                new GetConnectedDevices().execute();
+
             }
         });
+
 
         btnJoin.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -73,5 +87,85 @@ public class MainActivity extends AppCompatActivity {
 
             }
         });
+    }
+
+
+    public void getListOfConnectedDevice() {
+        /*Thread thread = new Thread(new Runnable() {
+
+            @Override
+            public void run() {*/
+        BufferedReader br = null;
+        boolean isFirstLine = true;
+
+        try {
+            br = new BufferedReader(new FileReader("/proc/net/arp"));
+            String line;
+
+            while ((line = br.readLine()) != null) {
+                if (isFirstLine) {
+                    isFirstLine = false;
+                    continue;
+                }
+
+                String[] splitted = line.split(" +");
+
+                if (splitted != null && splitted.length >= 4) {
+
+                    String ipAddress = splitted[0];
+                    String macAddress = splitted[3];
+
+                    boolean isReachable = InetAddress.getByName(
+                            splitted[0]).isReachable(500);  // this is network call so we cant do that on UI thread, so i take background thread.
+                    if (isReachable) {
+                        ConnectedDeviceModel connectedDeviceModel = new ConnectedDeviceModel();
+                        connectedDeviceModel.setIpAddress(ipAddress);
+                        connectedDeviceModel.setMacAddress(macAddress);
+                        connectedDeviceModels.add(connectedDeviceModel);
+                        Log.d("Device Information", ipAddress + " : "
+                                + macAddress);
+                    }
+
+                }
+
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                br.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+    class GetConnectedDevices extends AsyncTask<Void,Void,Void>{
+        @Override
+        protected void onPreExecute() {
+            Log.e("Start","Start");
+            Tools.showProgress(MainActivity.this);
+        }
+
+        @Override
+        protected Void doInBackground(Void... params) {
+            //getfromLoop();
+            getListOfConnectedDevice();
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void aVoid) {
+
+            Log.e("Done","Done");
+            Tools.hideProgress();
+            if(connectedDeviceModels.size()>0){
+                startActivity(new Intent(MainActivity.this,HostActivity.class));
+            }else {
+                Toast.makeText(MainActivity.this, "No Device is Connected Yet", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 }
